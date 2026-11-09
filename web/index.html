@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>connwatch</title>
+<style>
+:root{
+  --bg:#0e1116; --panel:#161b22; --panel2:#1c222b; --border:#2a313c; --text:#e6edf3; --muted:#8b96a5;
+  --accent:#4cc2ff; --green:#3fb950; --red:#f85149; --amber:#d29922; --violet:#a78bfa;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --border:#d0d7de; --text:#1f2328; --muted:#656d76;
+         --accent:#0969da; --green:#1a7f37; --red:#cf222e; --amber:#9a6700; --violet:#6639ba; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel);position:sticky;top:0;z-index:5}
+header h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.2px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px color-mix(in srgb,var(--red) 25%,transparent)}
+.dot.ok{background:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 25%,transparent)}
+#status{color:var(--muted);font-size:12px}
+header .sp{flex:1}
+header a{color:var(--muted);text-decoration:none;font-size:12px;border:1px solid var(--border);padding:3px 9px;border-radius:6px}
+header a:hover{color:var(--text)}
+.ctl{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+.ctl select,.ctl button{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font:inherit;font-size:12px;cursor:pointer}
+.ctl button:hover,.ctl select:hover{border-color:var(--muted)}
+.ctl button.paused{background:color-mix(in srgb,var(--amber) 22%,transparent);border-color:var(--amber);color:var(--text)}
+.dot.paused{background:var(--amber);box-shadow:0 0 0 3px color-mix(in srgb,var(--amber) 25%,transparent)}
+#ctl-err{color:var(--red)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:16px 20px;max-width:1900px;margin:0 auto}
+@media (max-width:1100px){main{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px}
+.stat{padding:12px 14px}
+.stat .l{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+.stat .v{font-size:24px;font-weight:650;font-variant-numeric:tabular-nums}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+@media (max-width:800px){.charts{grid-template-columns:1fr}}
+.chartwrap{padding:10px 14px 6px}
+.chartwrap .lg{display:inline-flex;gap:10px;margin-left:10px}
+.chartwrap .lg i{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:4px}
+.stat .sub{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.v-in{color:var(--green)} .v-out{color:var(--violet)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+td.num .r{display:block;font-size:10.5px}
+.chartwrap .t{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}
+canvas{width:100%;height:110px;display:block}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);align-items:center}
+.toolbar input[type=search],.toolbar select{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 9px;font:inherit}
+.toolbar input[type=search]{flex:1;min-width:180px}
+.toolbar label{color:var(--muted);font-size:12px;display:flex;gap:5px;align-items:center;cursor:pointer;user-select:none}
+.tablewrap{overflow:auto;max-height:62vh}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{position:sticky;top:0;background:var(--panel2);text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 12px;cursor:pointer;white-space:nowrap;user-select:none}
+th.sorted::after{content:attr(data-arrow);margin-left:4px;color:var(--accent)}
+td{padding:6px 10px;border-top:1px solid var(--border);white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+td.dst{max-width:320px}
+th{padding-left:10px !important;padding-right:10px !important}
+tr.new td{animation:flash 1.6s ease-out}
+@keyframes flash{from{background:color-mix(in srgb,var(--green) 28%,transparent)}to{background:transparent}}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--muted)}
+.pid{color:var(--muted);font-size:11px;margin-left:5px}
+.host{font-weight:600}
+.badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--border)}
+.b-out{color:var(--accent)} .b-in{color:var(--violet)} .b-listen{color:var(--muted)}
+.s-ESTABLISHED{color:var(--green)} .s-SYN_SENT,.s-SYN_RCVD{color:var(--amber)}
+.s-CLOSE_WAIT,.s-TIME_WAIT,.s-FIN_WAIT_1,.s-FIN_WAIT_2,.s-CLOSING,.s-LAST_ACK{color:var(--red)}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+aside{display:flex;flex-direction:column;gap:16px;min-width:0}
+.panel h2{margin:0;padding:10px 14px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);border-bottom:1px solid var(--border)}
+.bars{padding:8px 14px 10px}
+.bar{position:relative;display:flex;justify-content:space-between;gap:10px;padding:3px 6px;margin:2px 0;border-radius:5px;cursor:pointer;font-size:12.5px;overflow:hidden}
+.bar:hover{outline:1px solid var(--border)}
+.bar i{position:absolute;inset:0 auto 0 0;background:color-mix(in srgb,var(--accent) 22%,transparent);z-index:0;border-radius:5px}
+.bar span{position:relative;z-index:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar b{position:relative;z-index:1;font-variant-numeric:tabular-nums}
+.feed{max-height:320px;overflow:auto;padding:4px 0}
+.ev{display:grid;grid-template-columns:64px 44px 1fr;gap:8px;padding:3px 14px;font-size:12px;align-items:baseline}
+.ev .tt{color:var(--muted);font-family:var(--mono);font-size:11px}
+.ev .k{font-weight:700;font-size:10.5px;letter-spacing:.4px}
+.k-open{color:var(--green)} .k-close{color:var(--red)} .k-update{color:var(--amber)}
+.ev .d{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>connwatch</h1>
+  <span id="status">connecting…</span>
+  <span class="sp"></span>
+  <span class="ctl">
+    <span id="ctl-err"></span>
+    <label for="interval">Poll every</label>
+    <select id="interval" title="How often connwatch reads the connection table">
+      <option value="500">0.5s</option><option value="1000">1s</option><option value="2000">2s</option>
+      <option value="5000">5s</option><option value="10000">10s</option><option value="30000">30s</option>
+      <option value="60000">1m</option>
+    </select>
+    <button id="pause" type="button" title="Stop / restart polling on the server">⏸ Pause</button>
+  </span>
+  <a href="/metrics" target="_blank">/metrics</a>
+  <a href="/api/connections" target="_blank">/api/connections</a>
+</header>
+
+<main>
+  <section>
+    <div class="stats">
+      <div class="card stat"><div class="l">Active</div><div class="v" id="s-active">0</div></div>
+      <div class="card stat"><div class="l">Opened</div><div class="v" id="s-opened">0</div></div>
+      <div class="card stat"><div class="l">Closed</div><div class="v" id="s-closed">0</div></div>
+      <div class="card stat"><div class="l">Remote hosts</div><div class="v" id="s-hosts">0</div></div>
+      <div class="card stat"><div class="l">Processes</div><div class="v" id="s-procs">0</div></div>
+      <div class="card stat"><div class="l">↓ Receiving</div><div class="v v-in" id="s-rin">0</div><div class="sub" id="s-tin"></div></div>
+      <div class="card stat"><div class="l">↑ Sending</div><div class="v v-out" id="s-rout">0</div><div class="sub" id="s-tout"></div></div>
+    </div>
+
+    <div class="charts">
+      <div class="card chartwrap">
+        <div class="t"><span>Active connections</span><span id="chart-range"></span></div>
+        <canvas id="chart"></canvas>
+      </div>
+      <div class="card chartwrap">
+        <div class="t"><span>Throughput<span class="lg"><span><i style="background:var(--green)"></i>in</span><span><i style="background:var(--violet)"></i>out</span></span></span><span id="tchart-peak"></span></div>
+        <canvas id="tchart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <input type="search" id="q" placeholder="Filter by process, host, IP, port, pid…">
+        <select id="f-proto"><option value="">All protocols</option><option>tcp</option><option>udp</option><option>quic</option></select>
+        <select id="f-dir"><option value="">All directions</option><option>outbound</option><option>inbound</option><option>listen</option></select>
+        <label><input type="checkbox" id="f-loop"> hide loopback</label>
+        <label title="Stop redrawing the table (polling continues)"><input type="checkbox" id="f-pause"> freeze table</label>
+        <span class="muted" id="count"></span>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th data-k="process">Process</th>
+            <th data-k="source">Source</th>
+            <th data-k="dest">Destination</th>
+            <th data-k="rx" style="text-align:right">Received</th>
+            <th data-k="tx" style="text-align:right">Sent</th>
+            <th data-k="geo">Location / network</th>
+            <th data-k="proto">Proto</th>
+            <th data-k="state">State</th>
+            <th data-k="dir">Dir</th>
+            <th data-k="age">Age</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" hidden>No connections match.</div>
+      </div>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card panel"><h2>Top bandwidth now (by process)</h2><div class="bars" id="top-bw"></div></div>
+    <div class="card panel"><h2>Most data transferred (by process)</h2><div class="bars" id="top-bytes"></div></div>
+    <div class="card panel"><h2>Top processes (connections)</h2><div class="bars" id="top-procs"></div></div>
+    <div class="card panel"><h2>Top destinations</h2><div class="bars" id="top-dests"></div></div>
+    <div class="card panel"><h2>Top countries</h2><div class="bars" id="top-countries"></div></div>
+    <div class="card panel"><h2>Top networks (ASN)</h2><div class="bars" id="top-asns"></div></div>
+    <div class="card panel"><h2>Live events</h2><div class="feed" id="feed"></div></div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const S = {
+  conns: new Map(), fresh: new Set(), history: [], feed: [],
+  opened: 0, closed: 0, pollMS: 0, intervalMS: 2000, paused: false, live: false,
+  sort: {key: "age", dir: 1}, dirty: true, loadedOnce: false,
+};
+const FEED_MAX = 150, HIST_MAX = 400, ROW_MAX = 600;
+
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function isLoop(a){ return a === "127.0.0.1" || a === "::1" || (a||"").startsWith("127."); }
+function fmtAge(ms){
+  const s = Math.max(0, Math.floor(ms/1000));
+  if (s < 60) return s + "s";
+  if (s < 3600) return Math.floor(s/60) + "m " + (s%60) + "s";
+  if (s < 86400) return Math.floor(s/3600) + "h " + Math.floor(s%3600/60) + "m";
+  return Math.floor(s/86400) + "d " + Math.floor(s%86400/3600) + "h";
+}
+function fmtBytes(n){
+  n = n || 0;
+  if (n < 1024) return n + " B";
+  const u = ["KB","MB","GB","TB"]; let i = -1;
+  do { n /= 1024; i++; } while (n >= 1024 && i < u.length-1);
+  return (n < 10 ? n.toFixed(1) : Math.round(n)) + " " + u[i];
+}
+function fmtRate(n){ return fmtBytes(Math.round(n || 0)) + "/s"; }
+function ep(a, p){ if(!a) return "—"; const h = a.includes(":") ? "["+a+"]" : a; return p ? h+":"+p : h; }
+const dest = c => c.remote_host || c.remote_addr || "";
+const first = c => Date.parse(c.first_seen);
+function flag(cc){ return cc && cc.length === 2 ? String.fromCodePoint(...[...cc.toUpperCase()].map(ch => 0x1F1A5 + ch.charCodeAt(0))) : ""; }
+function geoText(c){ const g = c.geo; if (!g) return ""; return [g.city, g.country || g.cc].filter(Boolean).join(", "); }
+function asnText(c){ const g = c.geo; return g && g.asn ? "AS" + g.asn + (g.org ? " " + g.org : "") : ""; }
+
+/* ---------- data ---------- */
+function apply(ev){
+  const c = ev.conn;
+  if (ev.type === "open"){
+    if (!S.conns.has(c.id)) S.fresh.add(c.id);
+    S.conns.set(c.id, c);
+  } else if (ev.type === "update"){
+    S.conns.set(c.id, c);
+  } else if (ev.type === "close"){
+    S.conns.delete(c.id); S.fresh.delete(c.id);
+  }
+  S.feed.unshift(ev);
+  if (S.feed.length > FEED_MAX) S.feed.length = FEED_MAX;
+  S.dirty = true;
+}
+function applyTraffic(tf){
+  for (const [id, c] of S.conns){
+    const v = tf[id];
+    if (v){ c.bytes_in = v[0]; c.bytes_out = v[1]; c.rate_in = v[2]; c.rate_out = v[3]; }
+    else { c.rate_in = 0; c.rate_out = 0; }
+  }
+  S.dirty = true;
+}
+function pushStats(st){
+  S.opened = st.opened_total; S.closed = st.closed_total;
+  S.rateIn = st.rate_in || 0; S.rateOut = st.rate_out || 0;
+  S.totIn = st.bytes_in_total || 0; S.totOut = st.bytes_out_total || 0;
+  if (st.poll_ms) S.pollMS = st.poll_ms;
+  S.history.push({t: Date.parse(st.time), n: st.active, i: S.rateIn, o: S.rateOut});
+  if (S.history.length > HIST_MAX) S.history.shift();
+  S.dirty = true;
+}
+
+/* ---------- SSE ---------- */
+function connect(){
+  const es = new EventSource("/events");
+  es.onopen = () => setStatus(true);
+  es.onerror = () => setStatus(false);
+  es.addEventListener("snapshot", e => {
+    const d = JSON.parse(e.data);
+    S.conns = new Map(d.connections.map(c => [c.id, c]));
+    S.fresh.clear();
+    applySettings({interval_ms: d.interval_ms, paused: d.paused});
+    S.feed = [];
+    S.loadedOnce = true;
+    setStatus(true);
+    pushStats(d.stats);
+  });
+  for (const t of ["open","update","close"]) es.addEventListener(t, e => apply(JSON.parse(e.data)));
+  es.addEventListener("stats", e => pushStats(JSON.parse(e.data)));
+  es.addEventListener("settings", e => applySettings(JSON.parse(e.data)));
+  es.addEventListener("traffic", e => applyTraffic(JSON.parse(e.data)));
+}
+function fmtInterval(ms){ return ms % 60000 === 0 ? (ms/60000) + "m" : (ms/1000) + "s"; }
+function applySettings(st){
+  S.intervalMS = st.interval_ms; S.paused = !!st.paused;
+  const sel = $("#interval"), v = String(st.interval_ms);
+  if (![...sel.options].some(o => o.value === v)){        // e.g. started with -interval 3s
+    const o = new Option(fmtInterval(st.interval_ms), v);
+    const after = [...sel.options].find(o => Number(o.value) > st.interval_ms);
+    sel.add(o, after || null);
+  }
+  sel.value = v;
+  const b = $("#pause");
+  b.textContent = S.paused ? "▶ Resume" : "⏸ Pause";
+  b.classList.toggle("paused", S.paused);
+  setStatus(S.live);
+}
+async function putSettings(body){
+  $("#ctl-err").textContent = "";
+  try {
+    const r = await fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    if (!r.ok) throw new Error((await r.text()).trim() || r.status);
+    applySettings(await r.json());
+  } catch (err) {
+    $("#ctl-err").textContent = "couldn't change setting: " + err.message;
+    applySettings({interval_ms: S.intervalMS, paused: S.paused}); // put the controls back
+  }
+}
+function setStatus(ok){
+  S.live = ok;
+  $("#dot").classList.toggle("paused", ok && S.paused);
+  $("#dot").classList.toggle("ok", ok);
+  $("#status").textContent = !ok ? "disconnected — retrying…"
+    : S.paused ? "paused · polling stopped" : "live · polling every " + fmtInterval(S.intervalMS);
+}
+
+/* ---------- filtering / sorting ---------- */
+function visible(){
+  const q = $("#q").value.trim().toLowerCase();
+  const proto = $("#f-proto").value, dir = $("#f-dir").value, noLoop = $("#f-loop").checked;
+  let list = [];
+  for (const c of S.conns.values()){
+    if (proto && c.proto !== proto) continue;
+    if (dir && c.direction !== dir) continue;
+    if (noLoop && isLoop(c.remote_addr)) continue;
+    if (q){
+      const hay = (c.process+" "+c.pid+" "+c.local_addr+":"+c.local_port+" "+c.remote_addr+":"+c.remote_port+" "+(c.remote_host||"")+" "+c.state+" "+c.user+" "+geoText(c)+" "+asnText(c)).toLowerCase();
+      if (!hay.includes(q)) continue;
+    }
+    list.push(c);
+  }
+  const {key, dir: d} = S.sort;
+  const val = {
+    process: c => c.process.toLowerCase(),
+    source: c => c.local_addr + ":" + String(c.local_port).padStart(5,"0"),
+    dest: c => dest(c).toLowerCase(),
+    geo: c => (c.geo?.cc || "~") + (c.geo?.org || ""),
+    proto: c => c.proto, state: c => c.state || "", dir: c => c.direction,
+    age: c => -first(c),
+    rx: c => -(c.rate_in * 1e12 + (c.bytes_in || 0)),
+    tx: c => -(c.rate_out * 1e12 + (c.bytes_out || 0)),
+  }[key];
+  list.sort((a,b) => { const x = val(a), y = val(b); return (x<y?-1:x>y?1:0) * d; });
+  return list;
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  const list = visible();
+  const now = Date.now();
+  $("#count").textContent = list.length + " shown";
+  $("#empty").hidden = list.length > 0;
+
+  if (!$("#f-pause").checked){
+    let html = "";
+    for (const c of list.slice(0, ROW_MAX)){
+      const host = c.remote_addr
+        ? (c.remote_host ? `<span class="host">${esc(c.remote_host)}</span> <span class="muted mono">${esc(ep(c.remote_addr, c.remote_port))}</span>`
+                         : `<span class="mono">${esc(ep(c.remote_addr, c.remote_port))}</span>`)
+        : `<span class="muted">—</span>`;
+      const dcls = c.direction === "outbound" ? "b-out" : c.direction === "inbound" ? "b-in" : "b-listen";
+      html += `<tr class="${S.fresh.has(c.id) ? "new" : ""}">
+        <td>${esc(c.process)}<span class="pid">${c.pid}</span></td>
+        <td class="mono">${esc(ep(c.local_addr, c.local_port))}</td>
+        <td class="dst">${host}</td>
+        <td class="num mono">${fmtBytes(c.bytes_in)}${c.rate_in ? `<span class="r v-in">↓ ${fmtRate(c.rate_in)}</span>` : ""}</td>
+        <td class="num mono">${fmtBytes(c.bytes_out)}${c.rate_out ? `<span class="r v-out">↑ ${fmtRate(c.rate_out)}</span>` : ""}</td>
+        <td>${c.geo ? `<span title="${esc(geoText(c))}">${flag(c.geo.cc)} ${esc(c.geo.cc || "")}</span> <span class="muted" title="${esc(asnText(c))}">${esc(c.geo.org || asnText(c))}</span>`
+                    : `<span class="muted">${c.remote_addr && !isLoop(c.remote_addr) ? "private" : "—"}</span>`}</td>
+        <td class="mono">${esc(c.proto)}</td>
+        <td class="mono s-${esc(c.state)}">${esc(c.state || "—")}</td>
+        <td><span class="badge ${dcls}">${esc(c.direction)}</span></td>
+        <td class="mono muted">${fmtAge(now - first(c))}</td></tr>`;
+    }
+    $("#rows").innerHTML = html;
+    S.fresh.clear();
+  }
+
+  // headers
+  for (const th of document.querySelectorAll("th")){
+    const on = th.dataset.k === S.sort.key;
+    th.classList.toggle("sorted", on);
+    th.dataset.arrow = on ? (S.sort.dir === 1 ? "▲" : "▼") : "";
+  }
+
+  // stats + top lists (all active connections, not just filtered)
+  const procs = new Map(), dests = new Map(), hosts = new Set(), countries = new Map(), asns = new Map();
+  const bw = new Map(), vol = new Map();
+  for (const c of S.conns.values()){
+    procs.set(c.process, (procs.get(c.process)||0) + 1);
+    const r = (c.rate_in || 0) + (c.rate_out || 0), b = (c.bytes_in || 0) + (c.bytes_out || 0);
+    if (r > 0) bw.set(c.process, (bw.get(c.process)||0) + r);
+    if (b > 0) vol.set(c.process, (vol.get(c.process)||0) + b);
+    if (c.remote_addr && !isLoop(c.remote_addr)){
+      const k = dest(c); dests.set(k, (dests.get(k)||0) + 1); hosts.add(c.remote_addr);
+      if (c.geo?.cc){ const ck = flag(c.geo.cc) + " " + (c.geo.country || c.geo.cc); countries.set(ck, (countries.get(ck)||0) + 1); }
+      if (c.geo?.asn){ const ak = asnText(c); asns.set(ak, (asns.get(ak)||0) + 1); }
+    }
+  }
+  $("#s-active").textContent = S.conns.size;
+  $("#s-opened").textContent = S.opened;
+  $("#s-closed").textContent = S.closed;
+  $("#s-hosts").textContent = hosts.size;
+  $("#s-procs").textContent = procs.size;
+  $("#s-rin").textContent = fmtRate(S.rateIn);
+  $("#s-rout").textContent = fmtRate(S.rateOut);
+  $("#s-tin").textContent = fmtBytes(S.totIn) + " since start";
+  $("#s-tout").textContent = fmtBytes(S.totOut) + " since start";
+  bars("#top-bw", bw, fmtRate);
+  bars("#top-bytes", vol, fmtBytes);
+  bars("#top-procs", procs);
+  bars("#top-dests", dests);
+  bars("#top-countries", countries);
+  bars("#top-asns", asns);
+  renderFeed();
+  drawChart("#chart", [{k: "n", color: "--accent", fill: true}], v => Math.round(v));
+  const peak = drawChart("#tchart", [{k: "i", color: "--green", fill: true}, {k: "o", color: "--violet"}], fmtRate);
+  $("#tchart-peak").textContent = peak ? "peak " + fmtRate(peak) : "";
+  if (S.history.length > 1) $("#chart-range").textContent = "last " + fmtAge(S.history[S.history.length-1].t - S.history[0].t);
+}
+function bars(sel, map, fmt = v => v){
+  const top = [...map.entries()].sort((a,b) => b[1]-a[1]).slice(0, 8);
+  const max = top.length ? top[0][1] : 1;
+  $(sel).innerHTML = top.length ? top.map(([k,v]) =>
+    `<div class="bar" data-q="${esc(k)}" title="${esc(k)}"><i style="width:${(v/max*100).toFixed(1)}%"></i><span>${esc(k)}</span><b>${esc(fmt(v))}</b></div>`).join("")
+    : `<div class="muted" style="padding:6px">nothing yet</div>`;
+}
+function renderFeed(){
+  $("#feed").innerHTML = S.feed.slice(0, 80).map(ev => {
+    const c = ev.conn, t = new Date(ev.time).toLocaleTimeString([], {hour12:false});
+    const d = c.remote_addr ? (c.remote_host || ep(c.remote_addr, c.remote_port)) + (c.remote_host ? ":" + c.remote_port : "") : ep(c.local_addr, c.local_port);
+    const cc = c.geo?.cc ? " " + flag(c.geo.cc) : "";
+    const extra = ev.type === "update" && ev.prev_state ? ` (${esc(ev.prev_state)}→${esc(c.state)})` : "";
+    return `<div class="ev"><span class="tt">${t}</span><span class="k k-${ev.type}">${ev.type.toUpperCase().slice(0,5)}</span><span class="d" title="${esc(c.process+" → "+d)}">${esc(c.process)} → ${esc(d)}${cc}${extra}</span></div>`;
+  }).join("") || `<div class="muted" style="padding:8px 14px">waiting for events…</div>`;
+}
+function drawChart(sel, series, fmt){
+  const cv = $(sel), ctx = cv.getContext("2d");
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  const data = S.history; if (data.length < 2) return 0;
+  const css = getComputedStyle(document.documentElement), v = n => css.getPropertyValue(n).trim();
+  let peak = 0; for (const d of data) for (const s of series) peak = Math.max(peak, d[s.k] || 0);
+  const max = Math.max(fmt === fmtRate ? 1024 : 5, peak) * 1.05, padL = 52, padB = 4, padT = 6;
+  const x = i => padL + i/(data.length-1) * (w-padL-2), y = n => padT + (1 - n/max) * (h-padT-padB);
+  ctx.strokeStyle = v("--border"); ctx.fillStyle = v("--muted"); ctx.font = "10px sans-serif"; ctx.lineWidth = 1;
+  for (const f of [0, .5, 1]){ const val = max*f/1.05, yy = y(val); ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(w, yy); ctx.stroke(); ctx.fillText(fmt(val), 2, yy+3); }
+  for (const s of series){
+    const col = v(s.color);
+    ctx.beginPath(); data.forEach((d,i) => i ? ctx.lineTo(x(i), y(d[s.k]||0)) : ctx.moveTo(x(i), y(d[s.k]||0)));
+    ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.stroke();
+    if (s.fill){
+      ctx.lineTo(x(data.length-1), y(0)); ctx.lineTo(x(0), y(0)); ctx.closePath();
+      ctx.globalAlpha = .13; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1;
+    }
+  }
+  return peak;
+}
+
+/* ---------- wiring ---------- */
+document.querySelector("thead").addEventListener("click", e => {
+  const th = e.target.closest("th"); if (!th) return;
+  S.sort = S.sort.key === th.dataset.k ? {key: th.dataset.k, dir: -S.sort.dir} : {key: th.dataset.k, dir: 1};
+  S.dirty = true;
+});
+$("#interval").addEventListener("change", e => putSettings({interval_ms: Number(e.target.value)}));
+$("#pause").addEventListener("click", () => putSettings({paused: !S.paused}));
+for (const id of ["#q","#f-proto","#f-dir","#f-loop","#f-pause"]) $(id).addEventListener("input", () => { S.dirty = true; });
+for (const sel of ["#top-bw","#top-bytes","#top-procs","#top-dests","#top-countries","#top-asns"]) $(sel).addEventListener("click", e => {
+  const b = e.target.closest(".bar"); if (!b) return;
+  $("#q").value = b.dataset.q.replace(/^\p{Regional_Indicator}{2}\s*/u, ""); S.dirty = true;
+});
+window.addEventListener("resize", () => { S.dirty = true; });
+
+// Coalesce bursts of events into at most ~4 renders per second; also tick ages.
+setInterval(() => { if (S.dirty){ S.dirty = false; render(); } }, 250);
+setInterval(() => { if (!$("#f-pause").checked) S.dirty = true; }, 1000);
+connect();
+</script>
+</body>
+</html>
